@@ -1,0 +1,155 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Kalkulator Lot Size (Multi-Pair)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #f4f4f4;
+    }
+    h2 { color: #222; text-align: center; }
+    label { display: block; margin-top: 12px; font-weight: bold; }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .result {
+      background: white;
+      padding: 15px;
+      margin-top: 20px;
+      border-radius: 5px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    @media (max-width: 600px) {
+      body { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<h2>Kalkulator Lot Size (Multi-Pair)</h2>
+
+<label>Pilih Pair:</label>
+<select id="pairType" onchange="toggleInputs()">
+  <option value="gold">Gold (XAU/USD)</option>
+  <option value="btc">Bitcoin (BTC/USD)</option>
+  <option value="gu">GBP/USD</option>
+  <option value="eu">EUR/USD</option>
+  <option value="uj">USD/JPY</option>
+</select>
+
+<label>Modal (RM):</label>
+<input type="number" id="capital" value="100">
+
+<label>Risk (%):</label>
+<input type="number" id="riskPercent" value="50">
+
+<label>Stop Loss (pips / USD):</label>
+<input type="number" id="stopLoss" value="50">
+
+<label>Take Profit (pips / USD):</label>
+<input type="number" id="takeProfit" value="50">
+
+<label>Spread (in pips):</label>
+<input type="number" id="spread" value="1.5">
+
+<label>Exchange Rate (USD/MYR):</label>
+<input type="number" id="exchangeRate" value="4.70">
+
+<div id="btcOnly" style="display: none;">
+  <label>BTC Price (USD):</label>
+  <input type="number" id="btcPrice" value="70000">
+</div>
+
+<button onclick="calculate()">Kira Lot Size</button>
+
+<div class="result" id="output"></div>
+
+<script>
+  async function getBTCPrice() {
+    try {
+      const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+      const data = await res.json();
+      return data.bitcoin.usd;
+    } catch (error) {
+      return 70000;
+    }
+  }
+
+  function toggleInputs() {
+    const pair = document.getElementById("pairType").value;
+    document.getElementById("btcOnly").style.display = (pair === "btc") ? "block" : "none";
+  }
+
+  async function calculate() {
+    const pair = document.getElementById("pairType").value;
+    const capital = parseFloat(document.getElementById("capital").value);
+    const riskPercent = parseFloat(document.getElementById("riskPercent").value);
+    const stopLoss = parseFloat(document.getElementById("stopLoss").value);
+    const takeProfit = parseFloat(document.getElementById("takeProfit").value);
+    const spread = parseFloat(document.getElementById("spread").value);
+    const rate = parseFloat(document.getElementById("exchangeRate").value);
+
+    let btcPrice = parseFloat(document.getElementById("btcPrice").value);
+    if (pair === "btc") {
+      btcPrice = await getBTCPrice();
+      document.getElementById("btcPrice").value = btcPrice;
+    }
+
+    const riskRM = capital * (riskPercent / 100);
+    const riskUSD = riskRM / rate;
+    const adjustedSL = stopLoss + spread;
+    const rrr = takeProfit / adjustedSL;
+    const profitUSD = riskUSD * rrr;
+    const profitRM = profitUSD * rate;
+    const lotSize = riskUSD / adjustedSL;
+
+    let lotLabel = " lot(s)";
+    if (pair === "btc") lotLabel = " BTC";
+    if (pair === "uj") lotLabel = " lot(s) @ 100 pip = $1";
+
+    let layers = "";
+    let baseLot = lotSize;
+    if (pair !== "btc") {
+      layers = "<strong>Layer Suggestions:</strong><br>";
+      for (let i = 1; i <= 3; i++) {
+        const layerLot = (baseLot / i).toFixed(4);
+        layers += `Layer ${i}: ${layerLot} lot(s)<br>`;
+      }
+    }
+
+    document.getElementById("output").innerHTML = `
+      <strong>Risk (RM):</strong> RM${riskRM.toFixed(2)}<br>
+      <strong>Risk (USD):</strong> $${riskUSD.toFixed(2)}<br>
+      <strong>Risk-Reward Ratio:</strong> ${rrr.toFixed(2)}<br>
+      <strong>Lot Size:</strong> ${lotSize.toFixed(4)}${lotLabel}<br>
+      <strong>Potential Profit:</strong> $${profitUSD.toFixed(2)} / RM${profitRM.toFixed(2)}<br>
+      ${pair === "btc" ? `<strong>Live BTC Price:</strong> $${btcPrice.toFixed(2)}<br>` : ""}
+      ${layers}
+    `;
+  }
+</script>
+
+</body>
+</html>
